@@ -1,42 +1,33 @@
-#———stage1 - jar builder ————-
+# --- Stage 2: Build the application ---
+FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 
-# Maven image
+# Set the working directory inside the container
+WORKDIR /app
 
-FROM maven:3.8.3-openjdk-17 AS builder 
+# Copy the source code and pom.xml
+COPY . .
 
-# Set working directory
+# Package the application (skipping tests for speed)
+RUN mvn clean package -DskipTests
+
+# --- Stage 2: Run the application ---
+FROM eclipse-temurin:17-jre-alpine
+
+# Create a non-root system user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 
 WORKDIR /app
 
-# Copy source code from local to container
-
-COPY . /app
-
-# Build application and skip test cases
-
-#EXPOSE 8080
-
-RUN mvn clean install -DskipTests=true
-
-#ENTRYPOINT ["java", "-jar", "/expenseapp.jar"]
-
-#--------------------------------------
-# Stage 2 - app build
-#--------------------------------------
-
-# Import small size java image
-
-FROM openjdk:17-alpine
-
-WORKDIR /app 
-
-# Copy build from stage 1 (builder)
-
+# Copy the compiled JAR file from the builder stage
 COPY --from=builder /app/target/*.jar /app/target/expenseapp.jar
 
-# Expose application port 
-
+# Expose the application port
 EXPOSE 8080
 
-# Start the application
-ENTRYPOINT ["java", "-jar", "/app/target/expenseapp.jar"]
+# Configure JVM parameters to respect container memory limits
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+
+# Execute the application
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/target/expenseapp.jar"]
+
